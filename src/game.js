@@ -3,7 +3,7 @@
 // title screen and no English in play (the expert review: a safe, wordless first two minutes). Watch mode (#watch) lets the
 // planning bot play.
 import { createWorld, padCost, padNeed, total, count, HOME } from './sim/world.js';
-import { step, DT, nearestNode, choosePerk, needsHammer, perk, coalPrice, cardValue, buy, shopCost, payDelay } from './sim/step.js';
+import { step, DT, nearestNode, choosePerk, needsHammer, perk, coalPrice, cardValue, buy, shopCost, payDelay, coalKeep } from './sim/step.js';
 import { botInput, botPerk, botShop } from './sim/bot.js';
 import { BAL } from './sim/config.js';
 import { T, makeView, clampCam, groundCanvas, drawPad, drawMarket, drawScene, drawNight, drawHeroGhost, BOOTH_DY } from './render/draw.js';
@@ -93,6 +93,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
 
   function start(asWatch, seed = (Date.now() & 0xfffff) + 1) {
     world = createWorld(seed, { relight, mode: getMode() });
+    sel = Math.max(0, world.offer.indexOf('hammer'));   // day 1: the hammer card is the one picked by Enter (round 8: Pickaxe locked the towers)
     cam = { x: world.hero.x, y: world.hero.y };
     acc = 0;
     mem = {};
@@ -506,6 +507,12 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       fullT = 2.5;
       floats.push({ text: 'MAX', wx: world.fire.x, wy: world.fire.y - 2.7, t: 0, color: '#9be37a', size: 20 });
     }
+    // at the cart with only the fire's lumps left: the fire and their number over the cart (the merchant keeps them back)
+    const keep = coalKeep(world), lumps = count(world.hero.stack, 'coal');
+    if (state === 'play' && lumps > 0 && lumps <= keep && !world.hero.moving && fullT <= 0 && Math.hypot(world.hero.x - world.market.x, world.hero.y - world.market.y) < 1.05) {
+      fullT = 2.5;
+      floats.push({ text: `${lumps}`, wx: world.market.x, wy: world.market.y - 2.4, t: 0, color: '#ffb347', size: 22, icon: 'fire' });
+    }
     for (const f of floats) f.t += dt;
     floats = floats.filter((f) => f.t < 1.2);
     // the fire runs low: a shout and an alarm, once until it is fed back up (Sam's playtest: he lost twice without knowing)
@@ -576,7 +583,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     const low = world.started && world.fire.hp < world.fire.max * 0.6;
     if (low && coal > 0) return world.fire;
     // the first lump of coal goes into the fire, so the rule is learnt on day 1 (Leo's playtest: he found out on night 2)
-    if (!fedOnce && coal > 0 && world.started && world.fire.hp <= world.fire.max - BAL.coal.heal) return world.fire;
+    if (!fedOnce && coal > 0 && world.started && world.fire.hp <= world.fire.max - BAL.coal.heal * 1.5) return world.fire;   // clear room: no flicker
     if (low && room) {
       let c = null, cd = 8;
       for (const o of world.coalOnGround) {
@@ -1055,6 +1062,20 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     ctx.restore();
   }
 
+  // low health: the screen's edges pulse red (round 8: all three fell without noticing the small bar in the corner)
+  function drawLowHealth(ctx, now) {
+    const h = world.hero;
+    if (state !== 'play' || h.dead || h.hp >= BAL.hero.hp * 0.35) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const W = ctx.canvas.width, H = ctx.canvas.height, g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.max(W, H) * 0.72);
+    g.addColorStop(0, 'rgba(255,0,0,0)');
+    g.addColorStop(1, `rgba(200,10,20,${0.28 + 0.14 * Math.sin(now * 0.012)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
   function drawFireMeter(ctx, sv, now) {
     if (!world.started || overFx) return;
     const k = world.fire.hp / world.fire.max, low = k < 0.3, jig = fireHurt * 4 * Math.sin(now * 0.08);
@@ -1440,6 +1461,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     }
     drawHeroSigns(ctx, sv, now);
     drawFireMeter(ctx, sv, now);
+    drawLowHealth(ctx, now);
     drawFloats(ctx, sv);
     if (!moved0 && !watch && state === 'play') drawDragHint(ctx, full, now);
     lastView = { cx, cy, z, camX: cam.x, camY: cam.y };
@@ -1591,6 +1613,12 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       ctx.scale(s, s);
       ctx.translate(-x, -cy);
       const on = i === sel && !touch;
+      if (start && id === 'hammer') {   // day 1: the hammer glows, what the first goal (build towers) needs (round 8)
+        rrect(ctx, r.x - 7, r.y - 7, cw + 14, ch + 14, 19);
+        ctx.strokeStyle = `rgba(255,211,74,${0.35 + 0.35 * Math.sin(now * 0.006)})`;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+      }
       rrect(ctx, r.x, r.y, cw, ch, 14);
       ctx.fillStyle = on ? '#5a3f22' : '#3b2a1a';
       ctx.fill();
@@ -1637,8 +1665,9 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
           icon(ctx, 'coin', r.x + 50, wy + 10, 14);
           text(ctx, String(cost), r.x + 60, wy + 11, { size: 15, weight: 900, align: 'left', color: can ? '#ffd34a' : '#ff8a6a' });
         } else {   // not yet: after night N
-          icon(ctx, 'moon', r.x + 50, wy + 10, 15, '#cfd8ff');
-          text(ctx, String(BAL.shop[id].after), r.x + 61, wy + 11, { size: 15, weight: 900, align: 'left', color: '#cfd8ff' });
+          padlock(ctx, r.x + 50, wy + 11, 10);   // locked till after night N (round 8: the moon read as a price)
+          icon(ctx, 'moon', r.x + 68, wy + 10, 15, '#cfd8ff');
+          text(ctx, String(BAL.shop[id].after), r.x + 79, wy + 11, { size: 15, weight: 900, align: 'left', color: '#cfd8ff' });
         }
         if (!touch && open) text(ctx, String(i + 4), r.x + ww - 12, r.y + 11, { size: 11, weight: 800, color: 'rgba(255,233,168,0.6)', shadow: false });
         ctx.globalAlpha = 1;

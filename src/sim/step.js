@@ -95,6 +95,9 @@ export function shopCost(w, id) {
   return c == null || w.owned[id] ? null : c;
 }
 
+// the lumps the merchant leaves for the fire: at night, or while it is under half
+export const coalKeep = (w) => (w.phase === 'night' || w.fire.hp < w.fire.max * 0.5 ? BAL.coal.keep : 0);
+
 // buy what is for sale at this dawn (it does not use up the free card)
 export function buy(w, id) {
   const cost = shopCost(w, id);
@@ -289,11 +292,13 @@ function hero(w, input, dt) {
   // the coal merchant buys coal, a lump at a time while the hero stands at his cart (stepping away keeps the rest for the
   // fire); wood and stone are not for sale, they are for building (Oleg: coal is the valuable one: burn it or sell it)
   // ... and only when he stops there: walking past sells nothing (Leo's playtest: the stall sold his things on the way past)
-  if (h.stack.includes('coal') && dist(h, w.market) < 1.05 && !h.moving && (h.sellT = (h.sellT || 0) + dt) >= BAL.payDelay) {
+  // ... and not the fire's last lumps at night or while it is under half (coalKeep)
+  const keep = coalKeep(w);
+  if (count(h.stack, 'coal') > keep && dist(h, w.market) < 1.05 && !h.moving && (h.sellT = (h.sellT || 0) + dt) >= BAL.payDelay) {
     h.sellAcc += dt * BAL.sellRate;
     while (h.sellAcc >= 1) {
       const i = h.stack.lastIndexOf('coal');
-      if (i < 0) break;
+      if (i < 0 || count(h.stack, 'coal') <= keep) break;
       h.sellAcc--;
       const res = h.stack.splice(i, 1)[0], v = coalPrice(w);
       w.coins += v;

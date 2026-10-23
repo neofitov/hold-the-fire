@@ -46,7 +46,9 @@ export const BAL = {
   // drops). It goes into the backpack (walk over it), and into the fire beside it, each lump healing `heal`
   // feedReach: anywhere by the fire (a bot stood 1.96 from it with 5 lumps, outside the old 1.8, and the fire went out)
   // coal is both the fire's fuel and the coins to build with (Oleg): burn it or sell it
-  coal: { hollow: 0.25, brute: 1, runner: 0.25, heal: 10, pickReach: 0.85, feedReach: 2.4, feedInterval: 0.3 },
+  // keep: lumps the merchant leaves in the bag at night or while the fire is under half (round 8: all three sold every lump,
+  // then lost the fire with none to feed it)
+  coal: { hollow: 0.25, brute: 1, runner: 0.25, heal: 10, pickReach: 0.85, feedReach: 2.4, feedInterval: 0.3, keep: 2 },
   // dawn: a night held pays coins[0] + coins[1] x its number, doubled when the fire took no hit (a perfect night). Kills and
   // dawns paid 87% of the coins in v0.7 and they piled up unspent (Mia's playtest: 183 coins on day 6, nothing to buy), so
   // coal is now the main income: kills drop 0-1 coin and coal more often, dawns pay less, a lump sells for 4
