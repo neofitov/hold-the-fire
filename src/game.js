@@ -29,6 +29,8 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   let fedOnce = false;                              // the first lump: the pointer leads to the fire until one goes in
   let fullT = 0;                                    // till the next fire icon over the cart (the lumps it keeps for the fire)
   let wonT = 0;                                     // how long the victory card has shown
+  let offerSeen = 0;                                // when the cards on screen first showed (real time)
+  let replayAt = -1e9;                              // when "play again" last started a game (real time)
   let offerT = 0, cards = [], sel = 1;              // the dawn choice: how long it has shown, where its cards are, the one picked by keys
   let spinReq = false;                              // Space or the spin button was pressed: spin on the next step
   let paused = false;                               // the pause (Oleg: no way to pause): the button, P or Escape, or the window left
@@ -126,6 +128,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     fedOnce = false;
     paused = false;
     offerT = 0;
+    offerSeen = 0;
     cards = [];
     taught = false;
     best = stats().bestNights || 0;
@@ -149,6 +152,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       start(false);
       begin();
       synth.music('day');
+      replayAt = performance.now();
     };
     if (!poki.canBreak()) return go();   // no ad possible: at once
     breakOn = true;
@@ -381,13 +385,15 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
           shake = Math.max(shake, 0.06);
           break;
         case 'towerDown':   // a Giant smashed it: rubble till it is repaired
+          banner({ icon: 'tower', color: '#ff8a6a' });
           particles(e.x, e.y - 0.8, '#9c7a52', 30, 5, 5);
           particles(e.x, e.y - 1.4, '#c0563b', 10, 4, 4);
           shake = Math.max(shake, 0.35);
           synth.cue('crash');
           break;
         case 'wallDown':
-          // broken: rubble till it is repaired
+          // broken: rubble till it is repaired, and a banner says so wherever it is
+          banner({ icon: 'wall', color: '#ff8a6a' });
           particles(e.x, e.y, '#8a6239', 22, 4, 4);
           shake = Math.max(shake, 0.25);
           synth.cue('crash');
@@ -452,6 +458,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     const id = world.offer && world.offer[n];
     if (!id || !choosePerk(world, id)) return;
     offerT = 0;
+    offerSeen = 0;
     keys.clear();
     joy = null;
   }
@@ -521,12 +528,6 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     }
     // at the fire with coal it has no room for: MAX over it, now and then (Dana's and Leo's round 7: it took nothing, said nothing)
     fullT = Math.max(0, fullT - dt);
-    // at the cart with only the fire's lumps left: the fire and their number over the cart (the merchant keeps them back)
-    const keep = coalKeep(world), lumps = count(world.hero.stack, 'coal');
-    if (state === 'play' && lumps > 0 && lumps <= keep && !world.hero.moving && fullT <= 0 && Math.hypot(world.hero.x - world.market.x, world.hero.y - world.market.y) < 1.05) {
-      fullT = 2.5;
-      floats.push({ text: `${lumps}`, wx: world.market.x, wy: world.market.y - 2.4, t: 0, color: '#ffb347', size: 22, icon: 'fire' });
-    }
     for (const f of floats) f.t += dt;
     floats = floats.filter((f) => f.t < 1.2);
     // the fire runs low: a shout and an alarm, once until it is fed back up (Sam's playtest: he lost twice without knowing)
@@ -1293,7 +1294,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   // coins); it glows while the hero stands there with coal
   function drawCartSign(ctx, sv, now) {
     const h = world.hero, x = sv.sx(world.market.x + 0.45), y = sv.sy(world.market.y + BOOTH_DY - 2.05);
-    const near = h.stack.includes('coal') && Math.hypot(h.x - world.market.x, h.y - world.market.y) < 1.05;
+    const near = h.stack.includes('coal') && Math.hypot(h.x - world.market.x, h.y - world.market.y) < BAL.sellReach;
     const w = 86, hx = sv.sx(h.x), hy = sv.sy(h.y) - 18;
     ctx.save();
     // see-through while the hero is behind it (Dana's playtest: she lost him behind the sign in fights)
@@ -1315,6 +1316,16 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     ctx.fill();
     text(ctx, String(coalPrice(world)), x + 17, y + 1, { size: 17, weight: 900, alpha: ctx.globalAlpha });   // with the coal-price card (Leo: the sign stayed at 4)
     icon(ctx, 'coin', x + 32, y, 16);
+    // by it with only the lumps the merchant keeps for the fire: a fire and their number beside the sign, while he stands there
+    // (Mia's round 10: the cart would not buy and nothing said why)
+    const keep = coalKeep(world), lumps = count(h.stack, 'coal');
+    if (near && lumps <= keep) {
+      rrect(ctx, x + w / 2 + 4, y - 14, 46, 28, 8);
+      ctx.fillStyle = 'rgba(30,22,16,0.85)';
+      ctx.fill();
+      icon(ctx, 'fire', x + w / 2 + 18, y, 20);
+      text(ctx, String(lumps), x + w / 2 + 30, y + 1, { size: 17, weight: 900, align: 'left', color: '#ffb347', alpha: ctx.globalAlpha });
+    }
     ctx.restore();
   }
 
@@ -1630,6 +1641,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   // the dawn choice: three cards, each a picture and a number, no words (Leo's playtests: no real choices). Tap or click one,
   // or 1 2 3, or the arrows and Enter
   function drawOffer(ctx, full, now) {
+    if (!offerSeen) offerSeen = performance.now();   // when these cards first showed (real time)
     const k = Math.min(1, offerT / 0.3), touch = matchMedia('(pointer: coarse)').matches;
     ctx.fillStyle = `rgba(10,8,20,${0.6 * k})`;
     ctx.fillRect(full.x, full.y, full.w, full.h);
@@ -1772,7 +1784,11 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
         return;
       }
       const wr = (ui.wares || []).find((r) => hit(r, p));
-      const ready = offerT > (world.day === 1 && !world.started ? 0.8 : 0.35);   // a new game's cards: a moment longer (Mia's round 9)
+      // after "play again" a moment of real time first (Mia's round 9: a second tap picked the new game's card unseen); counted
+      // in game time it also swallowed the first clicks of a fresh page in the playtests (round 10)
+      // ... and the cards themselves a third of a second on screen, in real time too (offerT, game time, never ran on a fresh
+      // page in a playtest: first clicks were lost)
+      const ready = offerSeen && performance.now() - offerSeen > 350 && performance.now() - replayAt > 700;
       if (wr && ready) return shopBuy(wr.id);
       const i = cards.findIndex((r) => hit(r, p));
       if (i >= 0 && ready) pick(i);

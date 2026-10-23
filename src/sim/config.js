@@ -33,7 +33,8 @@ export const BAL = {
   payRate: 30,           // wood, stone or coins a second into a pad
   payDelay: 0.45,        // standing on a pad this long before paying starts (walking across one costs nothing)
   payDelayBig: 1.5,      // ... on one asking payBigFrom coins or more (Leo's rounds 6 and 7: walking onto spots cost him 8-69 coins)
-  payBigFrom: 40,        // (the woodcutter's house, 40, sits by the fire where he passes all the time)
+  payBigFrom: 40,
+  sellReach: 1.3,        // how near the cart's spot he stands to sell (1.05 was missed again and again: round 10)        // (the woodcutter's house, 40, sits by the fire where he passes all the time)
   startCoins: 6,         // with 6 wood from the first trees, the first tower (the tutorial's goal)
   coinMagnet: 3.2,
   // the fire burns down by itself (`burn` a second, from the first build on; Oleg's play: coal only matters if the fire needs

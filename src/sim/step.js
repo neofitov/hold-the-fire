@@ -294,7 +294,7 @@ function hero(w, input, dt) {
   // ... and only when he stops there: walking past sells nothing (Leo's playtest: the stall sold his things on the way past)
   // ... and not the fire's last lumps at night or while it is under half (coalKeep)
   const keep = coalKeep(w);
-  if (count(h.stack, 'coal') > keep && dist(h, w.market) < 1.05 && !h.moving && (h.sellT = (h.sellT || 0) + dt) >= BAL.payDelay) {
+  if (count(h.stack, 'coal') > keep && dist(h, w.market) < BAL.sellReach && !h.moving && (h.sellT = (h.sellT || 0) + dt) >= BAL.payDelay) {
     h.sellAcc += dt * BAL.sellRate;
     while (h.sellAcc >= 1) {
       const i = h.stack.lastIndexOf('coal');
@@ -307,7 +307,7 @@ function hero(w, input, dt) {
     }
   } else {
     h.sellAcc = 0;
-    if (h.moving || dist(h, w.market) >= 1.05) h.sellT = 0;
+    if (h.moving || dist(h, w.market) >= BAL.sellReach) h.sellT = 0;
   }
   // wood and stone go onto the camp's pile when the hero stands at it (coal stays: it is for the fire or the merchant)
   // ... when he stops there, like everything that takes from the backpack (Mia's playtest: the pile, the fire and the walls

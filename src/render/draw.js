@@ -168,10 +168,10 @@ export function drawPad(ctx, v, p, world, now) {
 // the spot in front of the booth where the hero stands to sell
 export function drawMarket(ctx, v, world, now) {
   const x = v.sx(world.market.x), y = v.sy(world.market.y);
-  const busy = world.hero.stack.includes('coal') && Math.hypot(world.hero.x - world.market.x, world.hero.y - world.market.y) < 1.05;
+  const busy = world.hero.stack.includes('coal') && Math.hypot(world.hero.x - world.market.x, world.hero.y - world.market.y) < BAL.sellReach;
   ctx.fillStyle = busy ? 'rgba(255,211,74,0.32)' : 'rgba(255,211,74,0.14)';
   ctx.beginPath();
-  ctx.ellipse(x, y, 0.8 * T, 0.45 * T, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y, BAL.sellReach * 0.85 * T, BAL.sellReach * 0.48 * T, 0, 0, Math.PI * 2);   // the spot, as big as it reaches
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,211,74,0.7)';
   ctx.lineWidth = 2;
@@ -186,7 +186,7 @@ export function drawMarket(ctx, v, world, now) {
 export const BOOTH_DY = -0.55;
 function drawBooth(ctx, v, world, now) {
   const x = v.sx(world.market.x), base = v.sy(world.market.y + BOOTH_DY), w = 1.9 * T, h = world.hero;
-  const selling = h.stack.includes('coal') && Math.hypot(h.x - world.market.x, h.y - world.market.y) < 1.05;
+  const selling = h.stack.includes('coal') && Math.hypot(h.x - world.market.x, h.y - world.market.y) < BAL.sellReach;
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath();
   ctx.ellipse(x, base + 2, w * 0.6, 7, 0, 0, Math.PI * 2);
@@ -642,7 +642,7 @@ export function heroTool(world) {
   if ((h.swing || 0) > 0) return { tool: 'axe', busy: true };
   if (h.pad && !h.moving && h.padT > 0) return { tool: 'hammer', busy: true };
   const coal = h.stack.includes('coal'), still = !h.moving;
-  const selling = still && coal && Math.hypot(h.x - world.market.x, h.y - world.market.y) < 1.05;
+  const selling = still && coal && Math.hypot(h.x - world.market.x, h.y - world.market.y) < BAL.sellReach;
   const feeding = still && coal && Math.hypot(h.x - world.fire.x, h.y - world.fire.y) < BAL.coal.feedReach && world.fire.hp <= world.fire.max - BAL.coal.heal;
   return { tool: 'hands', busy: selling || feeding };
 }
