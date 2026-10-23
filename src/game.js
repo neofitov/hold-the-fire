@@ -1390,9 +1390,12 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     wc.restore();
     stage.endWorld();
     drawSlashes(ctx, sv);
-    drawCartSign(ctx, sv, now);
-    drawPriceTags(ctx, sv, now, tg);
-    drawPileTag(ctx, sv);
+    // the world's signs and price tags, not under the dawn's cards (they showed through the dim between them)
+    if (!choosing()) {
+      drawCartSign(ctx, sv, now);
+      drawPriceTags(ctx, sv, now, tg);
+      drawPileTag(ctx, sv);
+    }
     drawHeroSigns(ctx, sv, now);
     drawFireMeter(ctx, sv, now);
     drawFloats(ctx, sv);
@@ -1586,7 +1589,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
         icon(ctx, id === 'bag' ? 'pack' : id, r.x + 22, wy, 28);
         const word = id === 'bag' ? `${t('card_pockets')} +${BAL.carry.perUpgrade}` : t(`card_${id}`);
         ctx.font = '900 13px system-ui, sans-serif';
-        const fit = Math.min(13, (13 * (ww - 44 - 6)) / Math.max(1, ctx.measureText(word).width));
+        const fit = Math.min(13, (13 * (ww - 44 - (touch ? 6 : 20))) / Math.max(1, ctx.measureText(word).width));   // clear of the key's number
         text(ctx, word, r.x + 42, wy - 8, { size: fit, weight: 900, align: 'left', color: '#fff4d0' });
         if (open) {
           icon(ctx, 'coin', r.x + 50, wy + 10, 14);
