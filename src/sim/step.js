@@ -230,6 +230,8 @@ export function move(w, o, dx, dy, r) {
 // a built wall's upgrade is paid from 1.75 (Dana's playtest: standing on its price tag, just under the wall, did nothing)
 export const padReach = (p) => (p.level === 0 ? 1.2 : p.kind === 'tower' ? 1.4 : p.kind === 'wall' ? 1.75 : 1.05);
 const padDist = (h, p) => Math.hypot(h.x - p.x, h.y - 0.3 - p.y);
+// how long he stands on a pad before it takes anything: longer for a dear one (the screen fills a bar meanwhile)
+export const payDelay = (p) => (padCost(p).coins >= BAL.payBigFrom ? BAL.payDelayBig : BAL.payDelay);
 
 function hero(w, input, dt) {
   const h = w.hero;
@@ -346,7 +348,7 @@ function hero(w, input, dt) {
   if (pad && !h.harvesting && !h.moving && !danger) {
     h.padT += dt;
     h.face = Math.sign(pad.x - h.x) || h.face;   // turned to what he builds
-    if (h.padT >= (padCost(pad).coins >= 50 ? BAL.payDelayBig : BAL.payDelay)) {
+    if (h.padT >= payDelay(pad)) {
       h.payAcc += dt * BAL.payRate;
       while (h.payAcc >= 1) {
         const need = padNeed(pad);

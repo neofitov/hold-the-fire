@@ -25,11 +25,13 @@ export function gameplayStart() {
     sdk()?.gameplayStart();
   } catch {}
 }
-// an ad break, before a new run: resolves when it is over (at once without the SDK); `onStart` runs if an ad really starts
+// an ad break, before a new run: resolves when it is over (at once without the SDK, and in a ?playtest: in a background tab the
+// SDK's break never ended and "play again" seemed dead to the testers); `onStart` runs if an ad really starts
+const PLAYTEST = new URLSearchParams(location.search).has('playtest');
 export function commercialBreak(onStart = () => {}) {
   try {
-    if (!sdk()) return Promise.resolve();
-    return Promise.race([sdk().commercialBreak(onStart).catch(() => {}), new Promise((done) => setTimeout(done, 60000))]);
+    if (!sdk() || PLAYTEST) return Promise.resolve();
+    return Promise.race([sdk().commercialBreak(onStart).catch(() => {}), new Promise((done) => setTimeout(done, 20000))]);
   } catch {
     return Promise.resolve();
   }

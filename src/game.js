@@ -3,7 +3,7 @@
 // title screen and no English in play (the expert review: a safe, wordless first two minutes). Watch mode (#watch) lets the
 // planning bot play.
 import { createWorld, padCost, padNeed, total, count, HOME } from './sim/world.js';
-import { step, DT, nearestNode, choosePerk, needsHammer, perk, coalPrice, cardValue, buy, shopCost } from './sim/step.js';
+import { step, DT, nearestNode, choosePerk, needsHammer, perk, coalPrice, cardValue, buy, shopCost, payDelay } from './sim/step.js';
 import { botInput, botPerk, botShop } from './sim/bot.js';
 import { BAL } from './sim/config.js';
 import { T, makeView, clampCam, groundCanvas, drawPad, drawMarket, drawScene, drawNight, drawHeroGhost, BOOTH_DY } from './render/draw.js';
@@ -27,6 +27,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   let fullPress = false;                            // a press that began on the fullscreen button
   let packBump = 0;                                 // the backpack in the HUD swells when a bigger one is bought
   let fedOnce = false;                              // the first lump: the pointer leads to the fire until one goes in
+  let fullT = 0;                                    // till the next MAX over a full fire
   let offerT = 0, cards = [], sel = 1;              // the dawn choice: how long it has shown, where its cards are, the one picked by keys
   let spinReq = false;                              // Space or the spin button was pressed: spin on the next step
   let paused = false;                               // the pause (Oleg: no way to pause): the button, P or Escape, or the window left
@@ -494,9 +495,16 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     packBump = Math.max(0, packBump - dt * 1.5);
     // the coal lesson: the first time the fire runs low, say so (Leo's playtest: he learned the fire eats coal only on the card)
     const coalIn = world.hero.stack.includes('coal'), room = world.fire.hp <= world.fire.max - BAL.coal.heal;
-    if (state === 'play' && world.started && !taught && ((coalIn && room && !fedOnce) || world.fire.hp < world.fire.max * 0.6)) {
+    // ... once coal can be had: with no pickaxe and none in the bag it asked for what she could not get (Mia's round 7)
+    if (state === 'play' && world.started && !taught && (coalIn || world.tools.pickaxe) && ((coalIn && room && !fedOnce) || world.fire.hp < world.fire.max * 0.6)) {
       taught = true;
       shout(t('feed'), 'dawn', '@coal');   // with coal -> fire under it (Dana's playtest: she stood at the fire holding wood)
+    }
+    // at the fire with coal it has no room for: MAX over it, now and then (Dana's and Leo's round 7: it took nothing, said nothing)
+    fullT = Math.max(0, fullT - dt);
+    if (state === 'play' && coalIn && !room && !world.hero.moving && fullT <= 0 && Math.hypot(world.hero.x - world.fire.x, world.hero.y - world.fire.y) < BAL.coal.feedReach) {
+      fullT = 2.5;
+      floats.push({ text: 'MAX', wx: world.fire.x, wy: world.fire.y - 2.7, t: 0, color: '#9be37a', size: 20 });
     }
     for (const f of floats) f.t += dt;
     floats = floats.filter((f) => f.t < 1.2);
@@ -1025,11 +1033,35 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
 
   // the fire's fuel, big, right over the flames (Sam's playtest: the bar in the corner was small and far away); it flashes red
   // when low
+  // a small padlock: what needs a tool not had yet (Mia's and Dana's round 7 read the red cross as broken)
+  function padlock(ctx, x, y, s) {
+    ctx.save();
+    ctx.strokeStyle = '#2a1e10';
+    ctx.lineWidth = s * 0.42;
+    ctx.beginPath();
+    ctx.arc(x, y - s * 0.25, s * 0.42, Math.PI, 0);
+    ctx.stroke();
+    ctx.strokeStyle = '#e8e2d0';
+    ctx.lineWidth = s * 0.2;
+    ctx.stroke();
+    rrect(ctx, x - s * 0.62, y - s * 0.25, s * 1.24, s * 0.95, s * 0.2);
+    ctx.fillStyle = '#f2b632';
+    ctx.fill();
+    ctx.strokeStyle = '#2a1e10';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#2a1e10';
+    ctx.fillRect(x - s * 0.08, y + s * 0.05, s * 0.16, s * 0.35);
+    ctx.restore();
+  }
+
   function drawFireMeter(ctx, sv, now) {
     if (!world.started || overFx) return;
     const k = world.fire.hp / world.fire.max, low = k < 0.3, jig = fireHurt * 4 * Math.sin(now * 0.08);
     const x = sv.sx(world.fire.x) + jig, y = sv.sy(world.fire.y) - 74, w = 76;
     const flash = low ? 0.5 + 0.5 * Math.sin(now * 0.015) : fireHurt;
+    // not under the HUD's top row (it ran under the day's pill; the corner's bar shows the same)
+    if (y > stage.full().y + 64) {
     rrect(ctx, x - w / 2 - 3, y - 3, w + 6, 14, 7);
     ctx.fillStyle = `rgba(20,12,8,${0.75})`;
     ctx.fill();
@@ -1043,6 +1075,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     ctx.fill();
     icon(ctx, 'fire', x - w / 2 - 14, y + 3, 20);
     if (k < 0.65) icon(ctx, 'coal', x + w / 2 + 14, y + 3, 16 + 3 * flash, '#ff8a3a');   // what it needs, from 65% down
+    }
     if (fireHurt > 0) {   // under attack: the screen's edges pulse red
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1069,8 +1102,8 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
         rrect(ctx, x - 17, y - 15, 34, 30, 15);
         ctx.fillStyle = 'rgba(30,22,16,0.8)';
         ctx.fill();
-        icon(ctx, 'hammer', x, y + 1, 22);
-        icon(ctx, 'no', x, y, 26);
+        icon(ctx, 'hammer', x - 2, y + 1, 22);
+        padlock(ctx, x + 9, y + 7, 11);
         continue;
       }
       const here = h.pad === p, short = ['wood', 'stone', 'coins'].some((r) => need[r] > have[r]);
@@ -1084,10 +1117,19 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       rrect(ctx, x - wsum / 2, y - 13, wsum, 26, 13);
       ctx.fillStyle = here ? 'rgba(40,26,12,0.92)' : 'rgba(30,22,16,0.82)';
       ctx.fill();
+      // on it: a monster within 3 tiles keeps it from taking anything, so a ghost says why (Mia's and Leo's round 7: standing on
+      // a broken wall did nothing); else a bar fills while he stands before it takes anything (Leo: walk-overs cost him coins)
+      const scared = here && world.enemies.some((e) => !e.dead && Math.hypot(e.x - h.x, e.y - h.y) < 3);
       if (here) {
-        ctx.strokeStyle = short ? '#ff6a4a' : '#ffd34a';
+        ctx.strokeStyle = short || scared ? '#ff6a4a' : '#ffd34a';
         ctx.lineWidth = 2;
         ctx.stroke();
+        if (scared) icon(ctx, 'hollow', x + wsum / 2 + 14, y, 22, '#2c2340');
+        else if (!h.moving && h.padT > 0 && h.padT < payDelay(p)) {
+          rrect(ctx, x - wsum / 2 + 8, y + 15, (wsum - 16) * (h.padT / payDelay(p)), 4, 2);
+          ctx.fillStyle = '#ffd34a';
+          ctx.fill();
+        }
       }
       let px = x - wsum / 2 + 6;
       // what it buys, first: a tower, a wall, or the house's helper (Leo's and Dana's round 6: a price alone said
@@ -1189,8 +1231,8 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
         ctx.beginPath();
         ctx.arc(x, y, 14, 0, Math.PI * 2);
         ctx.fill();
-        icon(ctx, 'pickaxe', x, y + 1, 20);
-        icon(ctx, 'no', x, y, 24);
+        icon(ctx, 'pickaxe', x - 2, y + 1, 20);
+        padlock(ctx, x + 8, y + 7, 10);
       }
     }
     if (h.dead > 0) {
