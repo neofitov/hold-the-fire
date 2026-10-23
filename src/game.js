@@ -27,7 +27,8 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   let fullPress = false;                            // a press that began on the fullscreen button
   let packBump = 0;                                 // the backpack in the HUD swells when a bigger one is bought
   let fedOnce = false;                              // the first lump: the pointer leads to the fire until one goes in
-  let fullT = 0;                                    // till the next MAX over a full fire
+  let fullT = 0;                                    // till the next fire icon over the cart (the lumps it keeps for the fire)
+  let wonT = 0;                                     // how long the victory card has shown
   let offerT = 0, cards = [], sel = 1;              // the dawn choice: how long it has shown, where its cards are, the one picked by keys
   let spinReq = false;                              // Space or the spin button was pressed: spin on the next step
   let paused = false;                               // the pause (Oleg: no way to pause): the button, P or Escape, or the window left
@@ -49,6 +50,11 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     }
     if (paused) return;
     // the game-over card: Enter or R plays again, once the card is up (Leo's round 6: only a click worked)
+    if (state === 'won' && !watch && e.type === 'keydown' && wonT > 1) {   // the victory card: Enter goes on, R starts again
+      if (['Enter', 'NumpadEnter'].includes(e.code)) return goOn();
+      if (e.code === 'KeyR') return replay();
+      return;
+    }
     if (state === 'over' && !watch && e.type === 'keydown' && ['Enter', 'NumpadEnter', 'KeyR'].includes(e.code)) {
       e.preventDefault();
       if (ui.replay) replay();
@@ -139,13 +145,17 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   let breakOn = false;
   function replay() {
     if (breakOn) return;
+    const go = () => {
+      start(false);
+      begin();
+      synth.music('day');
+    };
+    if (!poki.canBreak()) return go();   // no ad possible: at once
     breakOn = true;
     poki.commercialBreak(() => synth.setMuted(true)).then(() => {
       breakOn = false;
       synth.setMuted(isMuted());
-      start(false);
-      begin();
-      synth.music('day');
+      go();
     });
   }
 
@@ -386,6 +396,13 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
           shout(t('victory'), 'victory', t('nights', e.nights), true);   // it takes the screen on its own
           synth.cue('victory');
           fireworks = 4;
+          // ... and a card that stays: go on into the nights after, or a new run (Dana's round 9: she saw no win and closed it)
+          if (!watch) {
+            state = 'won';
+            wonT = 0;
+            poki.gameplayStop();
+            bump('bestNights', e.nights, 'max');
+          }
           break;
         case 'arrow':
           play('arrow', 0.08, 0.15);
@@ -448,6 +465,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     for (const sl of slashes) sl.t += dt * timeScale();
     slashes = slashes.filter((sl) => sl.t < sl.life);
     dt *= timeScale();   // the speed setting: the whole game runs at it
+    if (state === 'won') wonT += dt;
     if (watch && world.offer && !dawnFx) {
       for (const id of botShop(world)) buy(world, id);
       choosePerk(world, botPerk(world));
@@ -503,10 +521,6 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     }
     // at the fire with coal it has no room for: MAX over it, now and then (Dana's and Leo's round 7: it took nothing, said nothing)
     fullT = Math.max(0, fullT - dt);
-    if (state === 'play' && coalIn && !room && !world.hero.moving && fullT <= 0 && Math.hypot(world.hero.x - world.fire.x, world.hero.y - world.fire.y) < BAL.coal.feedReach) {
-      fullT = 2.5;
-      floats.push({ text: 'MAX', wx: world.fire.x, wy: world.fire.y - 2.7, t: 0, color: '#9be37a', size: 20 });
-    }
     // at the cart with only the fire's lumps left: the fire and their number over the cart (the merchant keeps them back)
     const keep = coalKeep(world), lumps = count(world.hero.stack, 'coal');
     if (state === 'play' && lumps > 0 && lumps <= keep && !world.hero.moving && fullT <= 0 && Math.hypot(world.hero.x - world.market.x, world.hero.y - world.market.y) < 1.05) {
@@ -597,6 +611,8 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     const pick = world.tools.pickaxe;   // coal and rocks need it
     if (low && room && pick && world.phase === 'night') return nearestNode(world, h, 'coal');
     if (world.phase === 'night') {
+      // hurt: to the fire, which heals him, not to a Giant (Dana's round 9: the ring led her into one and she nearly fell)
+      if (h.hp < BAL.hero.hp * 0.5) return world.fire;
       const g = world.enemies.find((e) => e.kind === 'brute' && !e.dead && Math.hypot(e.x - world.fire.x, e.y - world.fire.y) < 7);
       if (g) return g;
     }
@@ -1005,6 +1021,46 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     });
   }
 
+  // after night 10: back to the nights after it, which go on and grow
+  function goOn() {
+    state = 'play';
+    poki.gameplayStart();
+  }
+
+  // the win: a crown, the nights held, go on (a play arrow) or a new run (Dana's round 9: no victory moment after night 10)
+  function wonCard(ctx, full) {
+    const a = Math.min(1, Math.max(0, wonT - 0.6) / 0.4);
+    ui.goOn = ui.replay = null;
+    if (a <= 0) return;
+    const cx = full.x + full.w / 2, cy = full.y + full.h / 2 + (1 - a) * 30;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(8,10,24,0.35)';
+    ctx.fillRect(full.x, full.y, full.w, full.h);
+    rrect(ctx, cx - 150, cy - 150, 300, 300, 22);
+    ctx.fillStyle = 'rgba(38,30,48,0.94)';
+    ctx.fill();
+    ctx.strokeStyle = '#ffd34a';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    icon(ctx, 'crown', cx, cy - 98, 64);
+    text(ctx, t('victory'), cx, cy - 42, { size: 36, weight: 900, color: '#ffe9a8' });
+    icon(ctx, 'moon', cx - 30, cy + 10, 36, '#cfd8ff');
+    text(ctx, `${world.day - 1}`, cx - 4, cy + 12, { size: 38, weight: 900, align: 'left' });
+    ui.goOn = { x: cx - 128, y: cy + 52, w: 120, h: 64, label: '' };
+    button(ctx, ui.goOn, { color: '#4f9a3a' });
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(cx - 80, cy + 68);
+    ctx.lineTo(cx - 50, cy + 84);
+    ctx.lineTo(cx - 80, cy + 100);
+    ctx.fill();
+    ui.replay = { x: cx + 8, y: cy + 52, w: 120, h: 64, label: '' };
+    button(ctx, ui.replay, { color: '#e0893a' });
+    icon(ctx, 'replay', cx + 68, cy + 84, 40);
+    ctx.restore();
+  }
+
   function overCard(ctx, full) {
     const a = Math.min(1, Math.max(0, (overFx ? overFx.t : 9) - 2.2) / 0.5);
     if (a <= 0) return;
@@ -1040,6 +1096,20 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
 
   // the fire's fuel, big, right over the flames (Sam's playtest: the bar in the corner was small and far away); it flashes red
   // when low
+  // a little house (a roof, a wall, a door) on the tag of a helper's house
+  function miniHouse(ctx, x, y, s) {
+    ctx.fillStyle = '#c0563b';
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.55, y - s * 0.05);
+    ctx.lineTo(x, y - s * 0.5);
+    ctx.lineTo(x + s * 0.55, y - s * 0.05);
+    ctx.fill();
+    ctx.fillStyle = '#e8d2a8';
+    ctx.fillRect(x - s * 0.4, y - s * 0.05, s * 0.8, s * 0.5);
+    ctx.fillStyle = '#5e3c1e';
+    ctx.fillRect(x - s * 0.1, y + s * 0.15, s * 0.2, s * 0.3);
+  }
+
   // a small padlock: what needs a tool not had yet (Mia's and Dana's round 7 read the red cross as broken)
   function padlock(ctx, x, y, s) {
     ctx.save();
@@ -1096,6 +1166,10 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     ctx.fill();
     icon(ctx, 'fire', x - w / 2 - 14, y + 3, 20);
     if (k < 0.65) icon(ctx, 'coal', x + w / 2 + 14, y + 3, 16 + 3 * flash, '#ff8a3a');   // what it needs, from 65% down
+    // full, with coal in the bag right by it: MAX by the meter while he stands there (a float that came and went was missed)
+    const hh = world.hero;
+    if (!hh.dead && hh.stack.includes('coal') && world.fire.hp > world.fire.max - BAL.coal.heal && Math.hypot(hh.x - world.fire.x, hh.y - world.fire.y) < BAL.coal.feedReach)
+      text(ctx, 'MAX', x + w / 2 + 8, y + 5, { size: 15, weight: 900, align: 'left', color: '#9be37a' });
     }
     if (fireHurt > 0) {   // under attack: the screen's edges pulse red
       ctx.save();
@@ -1131,7 +1205,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       const x = sv.sx(p.x) + (here && short ? Math.sin(now * 0.05) * 3 : 0), y = sv.sy(p.y + (p.level === 0 ? 0.62 : p.kind === 'tower' ? 0.75 : 0.6)) + 16;   // under the pad, clear of the hero
       const parts = [['wood', need.wood], ['stone', need.stone], ['coin', need.coins]].filter(([, n]) => n > 0);
       ctx.font = '900 16px system-ui, sans-serif';
-      const widths = parts.map(([, n]) => 22 + ctx.measureText(String(n)).width + 8), wsum = widths.reduce((a, b) => a + b, 0) + 10 + (p.broken ? 22 : p.level ? 16 : 0) + 26;
+      const widths = parts.map(([, n]) => 22 + ctx.measureText(String(n)).width + 8), wsum = widths.reduce((a, b) => a + b, 0) + 10 + (p.broken ? 22 : p.level ? 16 : 0) + 26 + (p.kind === 'helper' ? 20 : 0);
       // see-through while the hero walks behind it (Leo's playtest: labels hid his character)
       const hx = sv.sx(h.x), hy = sv.sy(h.y) - 18;
       ctx.globalAlpha = !here && Math.abs(hx - x) < wsum / 2 + 10 && Math.abs(hy - y) < 34 ? 0.35 : 1;
@@ -1156,6 +1230,10 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       // what it buys, first: a tower, a wall, or the house's helper (Leo's and Dana's round 6: a price alone said
       // nothing)
       const what = { tower: 'tower', wall: 'wall' }[p.kind] || { wood: 'axe', stone: 'pickaxe', coal: 'coal' }[p.job] || 'tower';
+      if (p.kind === 'helper') {   // a house first: it buys a house and its worker (Dana's round 9: "axe 40" said nothing)
+        miniHouse(ctx, px + 10, y + 1, 18);
+        px += 20;
+      }
       icon(ctx, what, px + 11, y, 20, what === 'coal' ? '#ff8a3a' : undefined);
       px += 26;
       if (p.broken) {   // a repair: a hammer (Oleg: broken walls and towers need one)
@@ -1503,13 +1581,14 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       ctx.fill();
     }
     drawHud(ctx, full, now);
-    drawShouts(ctx, full, now);
+    if (!(state === 'won' && wonT > 0.6)) drawShouts(ctx, full, now);   // the victory card takes over from the big words
     ui.play = ui.replay = null;
     if (watch && state === 'play') {
       ui.play = { x: full.x + full.w / 2 - 80, y: full.y + full.h - 64, w: 160, h: 44, label: 'Play yourself' };
       button(ctx, ui.play, { color: '#e0893a' });
     }
     if (state === 'over' && !watch) overCard(ctx, full);
+    if (state === 'won' && !watch) wonCard(ctx, full);
     if (choosing()) drawOffer(ctx, full, now);
     if (paused) {   // dimmed, with a big play button to go on
       ctx.fillStyle = 'rgba(10,8,20,0.6)';
@@ -1693,9 +1772,10 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
         return;
       }
       const wr = (ui.wares || []).find((r) => hit(r, p));
-      if (wr && offerT > 0.35) return shopBuy(wr.id);
+      const ready = offerT > (world.day === 1 && !world.started ? 0.8 : 0.35);   // a new game's cards: a moment longer (Mia's round 9)
+      if (wr && ready) return shopBuy(wr.id);
       const i = cards.findIndex((r) => hit(r, p));
-      if (i >= 0 && offerT > 0.35) pick(i);
+      if (i >= 0 && ready) pick(i);
       return;
     }
     if (hit(ui.speed, p)) {
@@ -1714,6 +1794,11 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     }
     if (state === 'over' && !watch) {
       if (hit(ui.replay, p)) replay();
+      return;
+    }
+    if (state === 'won' && !watch) {   // the victory card: go on, or a new run
+      if (wonT > 1 && hit(ui.goOn, p)) goOn();
+      else if (wonT > 1 && hit(ui.replay, p)) replay();
       return;
     }
     if (watch) {

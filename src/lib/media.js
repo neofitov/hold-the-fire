@@ -61,9 +61,11 @@ export const isMuted = () => muted;
 // the game's speed, 1x, 1.5x or 2x (Oleg: the game felt too fast, days and nights too short); 1x runs the world at two thirds
 // of the pace it had before, 1.5x at that pace, 2x faster. Kept between visits
 export const SPEEDS = [1, 1.5, 2];
+// (a ?playtest starts at 1x and keeps nothing: one tester's 2x carried into the next tester's tab, round 9)
+const PLAYTEST = new URLSearchParams(location.search).has('playtest');
 let speed = 1;
 try {
-  speed = SPEEDS.includes(+localStorage.getItem('htf.speed')) ? +localStorage.getItem('htf.speed') : 1;
+  if (!PLAYTEST) speed = SPEEDS.includes(+localStorage.getItem('htf.speed')) ? +localStorage.getItem('htf.speed') : 1;
 } catch {}
 export const getSpeed = () => speed;
 // the mode, easy, normal or hard (Oleg, 2026-10-23; normal by default); ?mode=easy|normal|hard picks it for a test and is
@@ -86,7 +88,7 @@ export const timeScale = () => (speed * 2) / 3;
 export function cycleSpeed() {
   speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
   try {
-    localStorage.setItem('htf.speed', String(speed));
+    if (!PLAYTEST) localStorage.setItem('htf.speed', String(speed));
   } catch {}
   return speed;
 }

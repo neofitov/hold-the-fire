@@ -28,6 +28,9 @@ export function gameplayStart() {
 // an ad break, before a new run: resolves when it is over (at once without the SDK, and in a ?playtest: in a background tab the
 // SDK's break never ended and "play again" seemed dead to the testers); `onStart` runs if an ad really starts
 const PLAYTEST = new URLSearchParams(location.search).has('playtest');
+// whether an ad break can happen here at all (else "play again" starts at once, not a moment later: round 9's second tap
+// landed on the new game's cards)
+export const canBreak = () => !!sdk() && !PLAYTEST;
 export function commercialBreak(onStart = () => {}) {
   try {
     if (!sdk() || PLAYTEST) return Promise.resolve();
