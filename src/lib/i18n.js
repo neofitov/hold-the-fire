@@ -62,7 +62,7 @@ let lang = 'en';
 export function pickLanguage() {
   let code = '';
   try {
-    code = (window.PokiSDK && window.PokiSDK.getLanguage && window.PokiSDK.getLanguage()) || navigator.language || '';
+    code = (window.PokiSDK && window.PokiSDK.getLanguage && window.PokiSDK.getLanguage()) || navigator.language || '';   // CrazyGames: the browser's
   } catch {}
   const base = String(code).toLowerCase().slice(0, 2);
   const forced = new URLSearchParams(location.search).get('lang');

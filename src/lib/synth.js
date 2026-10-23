@@ -66,6 +66,10 @@ export function setMuted(m) {
   muted = m;
   if (master) master.gain.value = m ? 0 : 1;
 }
+// after iOS suspended it (an app switch, a call): resume, from a touch or a click (the only time iOS allows it)
+export function wake() {
+  if (ac && ac.state !== 'running' && document.visibilityState === 'visible') ac.resume().catch(() => {});
+}
 export function pause(paused) {
   if (!ac) return;
   if (paused) ac.suspend().catch(() => {});

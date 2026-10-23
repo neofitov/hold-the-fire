@@ -4,7 +4,7 @@
 // play at once in their own tabs.
 import { createStage } from './lib/stage.js';
 import { loadMedia } from './lib/media.js';
-import * as poki from './lib/poki.js';
+import * as portal from './lib/portal.js';
 import * as synth from './lib/synth.js';
 import { pickLanguage } from './lib/i18n.js';
 import { VARIANT } from './variant.js';
@@ -60,10 +60,12 @@ window.HTF = { scene: () => scene, stage, run };   // a handle for automated che
 const variant = (new URLSearchParams(location.search).get('variant') || VARIANT).toUpperCase();
 // the music and cues rest while the tab is hidden
 document.addEventListener('visibilitychange', () => synth.pause(document.visibilityState !== 'visible'));
+// ... and iOS, which suspends the audio when the app is left or a call comes in, lets it resume only within a touch or a click
+for (const type of ['touchend', 'pointerup', 'keydown']) document.addEventListener(type, () => synth.wake(), { passive: true });
 
-Promise.all([poki.init(), loadMedia()]).then(() => {
+Promise.all([portal.init(), loadMedia()]).then(() => {
   pickLanguage();
-  poki.loadingFinished();
+  portal.loadingFinished();
   scene = gameScene(stage, { watch: location.hash === '#watch', relight: variant === 'B' });
   requestAnimationFrame(frame);
 });

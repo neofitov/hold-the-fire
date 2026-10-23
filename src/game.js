@@ -10,7 +10,7 @@ import { T, makeView, clampCam, groundCanvas, drawPad, drawMarket, drawScene, dr
 import { icon } from './render/icons.js';
 import { text, rrect, hit, iconButton, button, lerp } from './lib/ui.js';
 import { sprite, play, isMuted, toggleMute, stats, bump, getSpeed, cycleSpeed, timeScale, getMode, setMode } from './lib/media.js';
-import * as poki from './lib/poki.js';
+import * as portal from './lib/portal.js';
 import * as synth from './lib/synth.js';
 import { t } from './lib/i18n.js';
 
@@ -42,8 +42,8 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     paused = on;
     keys.clear();
     joy = null;
-    if (on) poki.gameplayStop();   // Poki: play stops while paused
-    else if (begun) poki.gameplayStart();
+    if (on) portal.gameplayStop();   // the portal: play stops while paused
+    else if (begun) portal.gameplayStart();
   };
   const onKey = (e) => {
     if (e.type === 'keydown' && (e.code === 'KeyP' || e.code === 'Escape')) {
@@ -95,6 +95,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   window.addEventListener('blur', release);
   // leaving the window pauses a game under way (not a simulated playtest: its tabs are always in the background)
   const playtest = new URLSearchParams(location.search).has('playtest');
+  const film = new URLSearchParams(location.search).has('film');   // filming the bot for a portal's preview video: no button over it
   window.addEventListener('blur', () => !playtest && begun && setPause(true));
   document.addEventListener('visibilitychange', () => document.visibilityState !== 'visible' && release());
   let ui = {};
@@ -138,7 +139,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   function begin() {
     if (begun || watch) return;
     begun = true;
-    poki.gameplayStart();
+    portal.gameplayStart();
     synth.start();
     synth.setMuted(isMuted());
     synth.music(world.phase === 'night' ? 'night' : 'day');
@@ -154,9 +155,9 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       synth.music('day');
       replayAt = performance.now();
     };
-    if (!poki.canBreak()) return go();   // no ad possible: at once
+    if (!portal.canBreak()) return go();   // no ad possible: at once
     breakOn = true;
-    poki.commercialBreak(() => synth.setMuted(true)).then(() => {
+    portal.commercialBreak(() => synth.setMuted(true)).then(() => {
       breakOn = false;
       synth.setMuted(isMuted());
       go();
@@ -406,7 +407,8 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
           if (!watch) {
             state = 'won';
             wonT = 0;
-            poki.gameplayStop();
+            portal.gameplayStop();
+            portal.happytime();
             bump('bestNights', e.nights, 'max');
           }
           break;
@@ -426,7 +428,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
           synth.music(null);
           synth.cue('out');
           if (!watch) {
-            poki.gameplayStop();
+            portal.gameplayStop();
             bump('bestNights', e.nights, 'max');
             bump('runs');
           }
@@ -511,9 +513,9 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
       if (u > 0) target = 0.12 + 0.5 * Math.min(1, u);
     }
     dark = lerp(dark, target, Math.min(1, dt * 1.6));
-    const h = world.hero;
-    cam.x = lerp(cam.x, h.x, Math.min(1, dt * 9));   // a tight follow (Dana's playtest: the hero ran to the screen's edge)
-    cam.y = lerp(cam.y, h.y, Math.min(1, dt * 9));
+    const h = world.hero, eye = film ? world.fire : h;   // a film holds the camp in view (the hero ran off to a wall)
+    cam.x = lerp(cam.x, eye.x, Math.min(1, dt * 9));   // a tight follow (Dana's playtest: the hero ran to the screen's edge)
+    cam.y = lerp(cam.y, eye.y, Math.min(1, dt * 9));
     if (dawnFx && (dawnFx.t += dt) > 2.8) dawnFx = null;
     fireHurt = Math.max(0, fireHurt - dt * 2);
     attackT -= dt;
@@ -1025,7 +1027,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   // after night 10: back to the nights after it, which go on and grow
   function goOn() {
     state = 'play';
-    poki.gameplayStart();
+    portal.gameplayStart();
   }
 
   // the win: a crown, the nights held, go on (a play arrow) or a new run (Dana's round 9: no victory moment after night 10)
@@ -1594,7 +1596,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     drawHud(ctx, full, now);
     if (!(state === 'won' && wonT > 0.6)) drawShouts(ctx, full, now);   // the victory card takes over from the big words
     ui.play = ui.replay = null;
-    if (watch && state === 'play') {
+    if (watch && state === 'play' && !film) {
       ui.play = { x: full.x + full.w / 2 - 80, y: full.y + full.h - 64, w: 160, h: 44, label: 'Play yourself' };
       button(ctx, ui.play, { color: '#e0893a' });
     }
