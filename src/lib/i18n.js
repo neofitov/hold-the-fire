@@ -1,6 +1,6 @@
 // The few words the game shows, short and loud (Oleg: cool text on nightfall and on a night survived), in the languages Poki
-// suggests first (English, French, Italian, German, Spanish, Turkish) and Portuguese. The language comes from Poki's SDK when it
-// is there, else the browser; {n} is a number.
+// suggests first (English, French, Italian, German, Spanish, Turkish) and Portuguese. The language comes from the browser
+// (?lang= picks one); {n} is a number.
 const WORDS = {
   en: { dusk: 'NIGHT FALLS', brute: 'A GIANT IS COMING!', night: 'NIGHT {n}', held: 'NIGHT {n} SURVIVED!', perfect: 'PERFECT NIGHT!', victory: 'VICTORY!', nights: '{n} NIGHTS HELD', out: 'THE FIRE WENT OUT', relit: 'THE FIRE LIVES!', dying: 'THE FIRE IS DYING!', best: 'BEST', hint: 'FEED THE FIRE WITH COAL', feed: 'FEED THE FIRE!', attack: 'SAVE THE FIRE!' },
   fr: { dusk: 'LA NUIT TOMBE', brute: 'UN GÉANT ARRIVE !', night: 'NUIT {n}', held: 'NUIT {n} SURVÉCUE !', perfect: 'NUIT PARFAITE !', victory: 'VICTOIRE !', nights: '{n} NUITS TENUES', out: "LE FEU S'EST ÉTEINT", relit: 'LE FEU REVIT !', dying: 'LE FEU FAIBLIT !', best: 'RECORD', hint: 'NOURRIS LE FEU DE CHARBON', feed: 'NOURRIS LE FEU !', attack: 'SAUVE LE FEU !' },
@@ -62,7 +62,7 @@ let lang = 'en';
 export function pickLanguage() {
   let code = '';
   try {
-    code = (window.PokiSDK && window.PokiSDK.getLanguage && window.PokiSDK.getLanguage()) || navigator.language || '';   // CrazyGames: the browser's
+    code = navigator.language || '';
   } catch {}
   const base = String(code).toLowerCase().slice(0, 2);
   const forced = new URLSearchParams(location.search).get('lang');

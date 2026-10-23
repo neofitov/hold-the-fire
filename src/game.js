@@ -10,7 +10,6 @@ import { T, makeView, clampCam, groundCanvas, drawPad, drawMarket, drawScene, dr
 import { icon } from './render/icons.js';
 import { text, rrect, hit, iconButton, button, lerp } from './lib/ui.js';
 import { sprite, play, isMuted, toggleMute, stats, bump, getSpeed, cycleSpeed, timeScale, getMode, setMode } from './lib/media.js';
-import * as portal from './lib/portal.js';
 import * as synth from './lib/synth.js';
 import { t } from './lib/i18n.js';
 
@@ -42,8 +41,6 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     paused = on;
     keys.clear();
     joy = null;
-    if (on) portal.gameplayStop();   // the portal: play stops while paused
-    else if (begun) portal.gameplayStart();
   };
   const onKey = (e) => {
     if (e.type === 'keydown' && (e.code === 'KeyP' || e.code === 'Escape')) {
@@ -95,7 +92,7 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   window.addEventListener('blur', release);
   // leaving the window pauses a game under way (not a simulated playtest: its tabs are always in the background)
   const playtest = new URLSearchParams(location.search).has('playtest');
-  const film = new URLSearchParams(location.search).has('film');   // filming the bot for a portal's preview video: no button over it
+  const film = new URLSearchParams(location.search).has('film');   // filming the bot for a preview video: no button over it
   window.addEventListener('blur', () => !playtest && begun && setPause(true));
   document.addEventListener('visibilitychange', () => document.visibilityState !== 'visible' && release());
   let ui = {};
@@ -135,33 +132,21 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
     best = stats().bestNights || 0;
   }
 
-  // the player's first input of a run starts Poki's gameplay clock
+  // the player's first input of a run starts the sound and the music (browsers allow sound only after an input)
   function begin() {
     if (begun || watch) return;
     begun = true;
-    portal.gameplayStart();
     synth.start();
     synth.setMuted(isMuted());
     synth.music(world.phase === 'night' ? 'night' : 'day');
   }
 
-  // the game-over card's play-again: a tap on its button, or Enter / R; Poki's ad break first, the sound off while it plays
-  let breakOn = false;
+  // the game-over card's play-again: a tap on its button, or Enter / R
   function replay() {
-    if (breakOn) return;
-    const go = () => {
-      start(false);
-      begin();
-      synth.music('day');
-      replayAt = performance.now();
-    };
-    if (!portal.canBreak()) return go();   // no ad possible: at once
-    breakOn = true;
-    portal.commercialBreak(() => synth.setMuted(true)).then(() => {
-      breakOn = false;
-      synth.setMuted(isMuted());
-      go();
-    });
+    start(false);
+    begin();
+    synth.music('day');
+    replayAt = performance.now();
   }
 
   // a shout: big words in the upper third (Oleg: cool text on nightfall and on a night survived), a style each
@@ -407,8 +392,6 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
           if (!watch) {
             state = 'won';
             wonT = 0;
-            portal.gameplayStop();
-            portal.happytime();
             bump('bestNights', e.nights, 'max');
           }
           break;
@@ -428,7 +411,6 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
           synth.music(null);
           synth.cue('out');
           if (!watch) {
-            portal.gameplayStop();
             bump('bestNights', e.nights, 'max');
             bump('runs');
           }
@@ -1027,7 +1009,6 @@ export function gameScene(stage, { watch: watchStart = false, relight = false })
   // after night 10: back to the nights after it, which go on and grow
   function goOn() {
     state = 'play';
-    portal.gameplayStart();
   }
 
   // the win: a crown, the nights held, go on (a play arrow) or a new run (Dana's round 9: no victory moment after night 10)
